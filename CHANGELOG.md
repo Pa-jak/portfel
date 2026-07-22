@@ -4,6 +4,44 @@ All notable changes to **portfel** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and the single source of truth is the
 `version` field in the root `package.json`. Newest entries first.
 
+## 0.2.1 — 2026-07-22
+
+Docker deployment tooling — single self-contained container that builds the
+frontend, compiles the server, and runs the Fastify process serving the built
+PWA statics + the API over the same port.
+
+### Added
+- Root **`Dockerfile`** (multi-stage, `linux/amd64`):
+  - `web-build` stage (`node:22-bookworm-slim`): `npm ci` in `web/`, then
+    `npx vite build` -> `web/dist`.
+  - `server-build` stage (`node:22-bookworm-slim` + `python3 make g++`):
+    `npm ci` in `server/` (so TS compiles), `npx tsc` -> `server/dist`, then a
+    second `npm ci --omit=dev` to get a clean production `node_modules` with a
+    Linux-built `better-sqlite3` native binding.
+  - `run` stage (`node:22-bookworm-slim`): preserves the repo layout under
+    `/app` — `/app/package.json`, `/app/server/dist`, `/app/server/node_modules`,
+    `/app/web/dist`. `NODE_ENV=production`, `PORT=3000`, `EXPOSE 3000`, declares
+    `/app/data` as a `VOLUME`, `HEALTHCHECK` curl against `http://127.0.0.1:3000/api/health`,
+    and `CMD ["node","server/dist/index.js"]` run from `/app`. The compiled
+    server's default path resolution (`__dirname=/app/server/dist` -> `../../web/dist`,
+    `../../data`, `../../package.json`) already matches this layout, so no env
+    overrides are required.
+- Root **`docker-compose.yml`**: one `portfel` service building the Dockerfile,
+  `ports: 3000:3000`, `volumes: ./data:/app/data`, `restart: unless-stopped`,
+  and a matching `healthcheck`.
+- Root **`.dockerignore`**: excludes `node_modules/`, `dist/`, `data/`, `.git/`,
+  logs, and `.env` from the build context.
+- README: Polish **"Wdrożenie (Docker)"** section (clone, build, access via
+  `http://SERVER_IP:3000`, update flow, data location & backup, HTTPS-for-PWA
+  note).
+
+### Notes
+- No source files changed — the server's path resolution and the default
+  `PORTFEL_DB_DIR` already work correctly when the repo layout is preserved at
+  `/app`, so the container runs out of the box.
+- `docker` is not required for development; the existing local
+  `npm run dev` / `npm run build` / `npm run start` workflow is unchanged.
+
 ## 0.2.0 — 2026-07-22
 
 Breaking simplification of the hiding feature, replacing the encrypted Web Crypto

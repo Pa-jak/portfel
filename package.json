@@ -1,6 +1,6 @@
 {
   "name": "portfel",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Self-hosted monthly net-worth tracker (Stage 1: backend)",
   "scripts": {

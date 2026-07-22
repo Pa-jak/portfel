@@ -56,8 +56,61 @@ reverse proxy with TLS — see Stage 3 docs.
 - `npm run server:start` serves the API on `http://localhost:3000` and the built
   frontend at `../web/dist` (once the frontend exists).
 
+## Wdrożenie (Docker)
+
+Aplikacja działa w jednym kontenerze —Fastify serwuje API i zbudowany frontend
+PWA na tym samym porcie `3000`. Wymagania: zainstalowane `docker` + `docker compose`.
+
+```bash
+# 1. Pobierz repozytorium na serwer domowy
+git clone <adres-repo> portfel
+cd portfel
+
+# 2. Zbuduj i uruchom kontener w tle
+docker compose up -d --build
+
+# 3. Otwórz w przeglądarce (zamiast SERVER_IP wstaw IP serwera w sieci LAN)
+#    http://SERVER_IP:3000
+```
+
+### Aktualizacja
+
+```bash
+git pull
+docker compose up -d --build
+```
+
+Nowa wersja aplikacji zostanie pobrana po odświeżeniu strony (PWA sam
+sprawdza aktualizacje w sekcji **Ustawienia → Sprawdź aktualizacje**).
+
+### Dane i kopie zapasowe
+
+Baza SQLite i backupy żyją w wolumenie `./data` (bind-mount do `/app/data` w
+kontenerze). Pojedynczy plik bazy to:
+
+```
+data/sqlite.db
+```
+
+Kopia zapasowa = skopiowanie tego pliku (najlepiej po zatrzymaniu kontenera):
+
+```bash
+docker compose stop
+cp data/sqlite.db data/sqlite.db.bak
+docker compose start
+```
+
+### Uwaga o HTTPS i PWA
+
+Sama aplikacja (w tym ukrywanie kategorii przez frazę `Alohomora`/`Obliviate`)
+poprawnie działa przez zwykłe `http://SERVER_IP:3000`. Natomiast **instalacja
+PWA** na urządzeniach mobilnych z ekranu domowego wymaga bezpiecznego kontekstu
+(HTTPS lub `localhost`). Aby możliwa była instalacja PWA przez LAN, postaw
+aplikację za reverse proxy z TLS (np. Caddy/Nginx + certyfikat) wystawiającym
+HTTPS na domenę/URL, który wskazuje na `http://SERVER_IP:3000`.
+
 ## Stage status
 
 - **Stage 1 — backend scaffold, DB, FX, REST routes:** DONE.
 - **Stage 2 — frontend PWA:** TODO.
-- **Stage 3 — Dockerfile, compose, deploy docs:** TODO.
+- **Stage 3 — Dockerfile, compose, deploy docs:** DONE.
