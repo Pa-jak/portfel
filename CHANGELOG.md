@@ -4,6 +4,15 @@ All notable changes to **portfel** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and the single source of truth is the
 `version` field in the root `package.json`. Newest entries first.
 
+## 0.3.1 — 2026-07-22
+
+### Fixed
+- Reveal/hide phrases were disabled in Docker because `docker-compose.yml` passes
+  `PORTFEL_REVEAL_PHRASE=${PORTFEL_REVEAL_PHRASE:-}` (an empty string when the host
+  var is unset), and the backend used `?? 'Alohomora'`, which keeps the empty string.
+  The env is now treated as unset when empty/whitespace, so it falls back to the
+  default phrase. Typing `Alohomora` reveals again on the deployed container.
+
 ## 0.3.0 — 2026-07-22
 
 ### Changed
