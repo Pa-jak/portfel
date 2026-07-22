@@ -4,6 +4,15 @@ All notable changes to **portfel** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and the single source of truth is the
 `version` field in the root `package.json`. Newest entries first.
 
+## 0.2.2 — 2026-07-22
+
+### Fixed
+- `GET /api/version` returned the server package's version (`0.1.0`) instead of the
+  root project version, because the compiled route (`server/dist/routes/version.js`)
+  resolved `../../package.json` (server) before the root. It now selects the
+  package.json whose `name` is `portfel` (the root), so the API version matches the
+  in-app footer version and the PWA update check compares correctly.
+
 ## 0.2.1 — 2026-07-22
 
 Docker deployment tooling — single self-contained container that builds the

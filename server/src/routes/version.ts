@@ -7,22 +7,27 @@ export default async function versionRoutes(app: FastifyInstance): Promise<void>
 }
 
 function readRootVersion(): string {
-  // Resolve the ROOT package.json robustly across dev (server/dist -> ../../package.json)
-  // and prod Docker layouts (the root package.json is copied to /app/package.json while
-  // the compiled server lives in /app/server/dist, so ../../package.json works there too).
+  // Compiled file lives at server/dist/routes/version.js, so:
+  //   ../../..           -> repo/app ROOT (name "portfel")   [dev AND Docker]
+  //   ../..              -> server/    (name "portfel-server")
+  // We must return the ROOT version, so prefer the package.json whose name is the
+  // root project ("portfel"); fall back to the first readable version if none match.
   const candidates = [
-    path.join(__dirname, "..", "..", "package.json"),
     path.join(__dirname, "..", "..", "..", "package.json"),
     path.join(process.cwd(), "package.json"),
+    path.join(__dirname, "..", "..", "package.json"),
   ];
+  let fallback: string | null = null;
   for (const p of candidates) {
     try {
       if (!fs.existsSync(p)) continue;
-      const pkg = JSON.parse(fs.readFileSync(p, "utf8")) as { version?: unknown };
-      if (typeof pkg.version === "string" && pkg.version.length > 0) return pkg.version;
+      const pkg = JSON.parse(fs.readFileSync(p, "utf8")) as { name?: unknown; version?: unknown };
+      if (typeof pkg.version !== "string" || pkg.version.length === 0) continue;
+      if (pkg.name === "portfel") return pkg.version; // the root package
+      if (fallback === null) fallback = pkg.version;
     } catch {
       // try next candidate
     }
   }
-  return "0.0.0";
+  return fallback ?? "0.0.0";
 }
