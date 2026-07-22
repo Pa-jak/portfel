@@ -1,0 +1,20 @@
+{
+  "name": "portfel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted monthly net-worth tracker (Stage 1: backend)",
+  "scripts": {
+    "server": "npm --prefix server run dev",
+    "server:build": "npm --prefix server run build",
+    "server:start": "npm --prefix server start",
+    "web": "npm --prefix web run dev",
+    "web:build": "npm --prefix web run build",
+    "dev": "concurrently -n server,web \"npm run server\" \"npm run web\"",
+    "build": "npm --prefix server run build && npm --prefix web run build",
+    "start": "npm --prefix server start",
+    "typecheck": "npm --prefix server run typecheck"
+  },
+  "devDependencies": {
+    "concurrently": "9.1.0"
+  }
+}
