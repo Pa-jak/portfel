@@ -9,11 +9,14 @@ import { triggerUpdate } from "../lib/pwa";
 export default function Settings() {
   const qc = useQueryClient();
   const settings = useQuery({ queryKey: qk.settings, queryFn: () => api.getSettings() });
+  const notes = useQuery({ queryKey: qk.notes, queryFn: () => api.getNotes() });
   const [updateState, setUpdateState] = useState<"idle" | "checking" | "latest" | "available">("idle");
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [baseCurrencies, setBaseCurrencies] = useState<string>("PLN,USD");
   const [accountCurrencies, setAccountCurrencies] = useState<string>("PLN,USD,EUR,NOK");
   const [loaded, setLoaded] = useState(false);
+  const [notesText, setNotesText] = useState<string>("");
+  const [notesLoaded, setNotesLoaded] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
   useEffect(() => {
@@ -23,6 +26,13 @@ export default function Settings() {
       setAccountCurrencies(settings.data.account_currencies ?? "PLN,USD,EUR,NOK");
     }
   }, [loaded, settings.data]);
+
+  useEffect(() => {
+    if (!notesLoaded && notes.data) {
+      setNotesLoaded(true);
+      setNotesText(notes.data.text ?? "");
+    }
+  }, [notesLoaded, notes.data]);
 
   const saveMut = useMutation({
     mutationFn: (b: Record<string, string>) => api.putSettings(b),
@@ -37,6 +47,15 @@ export default function Settings() {
   const fxMut = useMutation({
     mutationFn: () => api.refreshFx(),
     onSuccess: () => setMsg({ kind: "ok", text: "Kursy odświeżone." }),
+    onError: (e: Error) => setMsg({ kind: "err", text: e.message }),
+  });
+
+  const notesMut = useMutation({
+    mutationFn: (text: string) => api.putNotes(text),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.notes });
+      setMsg({ kind: "ok", text: "Zapisano notatkę." });
+    },
     onError: (e: Error) => setMsg({ kind: "err", text: e.message }),
   });
 
@@ -142,6 +161,26 @@ export default function Settings() {
           </div>
           <button className="btn primary" disabled={fxMut.isPending} onClick={() => fxMut.mutate()}>
             {fxMut.isPending ? "Odświeżanie…" : "Odśwież kursy"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card" style={{ marginTop: 12 }}>
+        <h3 className="h3">Notatnik — co dodać / poprawić</h3>
+        <textarea
+          className="field"
+          style={{ width: "100%", minHeight: 120, resize: "vertical", fontFamily: "inherit" }}
+          placeholder="Wpisz pomysły, błędy, rzeczy do dodania…"
+          value={notesText}
+          onChange={(e) => setNotesText(e.target.value)}
+        />
+        <div className="row" style={{ justifyContent: "flex-end", marginTop: 8 }}>
+          <button
+            className="btn primary"
+            disabled={notesMut.isPending}
+            onClick={() => notesMut.mutate(notesText)}
+          >
+            {notesMut.isPending ? "Zapisywanie…" : "Zapisz notatkę"}
           </button>
         </div>
       </div>

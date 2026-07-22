@@ -95,6 +95,12 @@ function migrate(db: Database.Database): void {
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    -- Dev notes notepad: a single free-text row kept OUT of /api/settings.
+    CREATE TABLE IF NOT EXISTS notes (
+      id   INTEGER PRIMARY KEY CHECK(id = 1),
+      text TEXT    NOT NULL DEFAULT ''
+    );
   `);
 
   seedSettings(db);
@@ -163,4 +169,8 @@ export interface SnapshotFxRow {
 export interface SettingsRow {
   key: string;
   value: string;
+}
+export interface NotesRow {
+  id: number;
+  text: string;
 }

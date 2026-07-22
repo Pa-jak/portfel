@@ -89,6 +89,32 @@ excluding hidden by default and including hidden when `?includeHidden=1`. The Da
 5. **Settings** — base/helper currencies, manual FX refresh, version & update check.
    (NO reveal/hide phrase UI — hiding must leave no trace in the app; phrases are server-side env only.)
 
+## Feature additions (v0.4.0 → v0.5.0)
+
+**Snapshots list & editing (v0.4.0).** Add a **"Snapshoty"** nav tab + page (`/snapshots`) listing all
+snapshots (month, income, and net worth PLN/USD per month from `/api/networth/history`), each with
+**Edytuj** (→ existing `/snapshot/:id`) and **Usuń**. A **"+ Nowy snapshot"** button links to `/snapshot`.
+The edit form already exists — this just makes past snapshots reachable and editable.
+
+**Dev notes / notepad (v0.4.0).** A small free-text notepad in **Settings** where the user jots what to
+add/fix in the app. Backend: `GET /api/notes` → `{ text }` and `PUT /api/notes { text }`, persisted (a
+`notes` singleton row — e.g. in a tiny `notes` table or a dedicated settings key kept OUT of
+`/api/settings`). Settings shows a textarea "Notatnik — co dodać / poprawić" with a Save button.
+
+**Drag-and-drop category ordering (v0.4.0).** Replace the numeric `sort_order` UI in Categories with
+drag-to-reorder. Remove the "Kolejność" column and the number field from the edit form. Add
+`PUT /api/categories/reorder { ids: number[] }` that sets `sort_order = index` for each id in one
+transaction. The drag MUST work on both desktop (mouse) and mobile (touch) — use pointer events (not
+HTML5 `draggable`, which ignores touch); include a visible drag handle (≡). Optimistically reorder then persist.
+
+**Fixed costs tab (v0.5.0).** New **"Koszty stałe"** nav tab + page (`/fixed-costs`) to track recurring
+bills/subscriptions — SEPARATE from net worth (a spending tracker, not assets). Data model:
+`fixed_costs(id, name, amount_minor, currency, cycle TEXT CHECK(cycle IN ('monthly','yearly')),
+note, active INTEGER DEFAULT 1, sort_order INTEGER DEFAULT 0, created_at)`. CRUD at `/api/fixed-costs`.
+The page lists items (name, amount, currency, cycle, active toggle), supports add/edit/delete, and shows a
+summary **"Miesięcznie razem"** and **"Rocznie razem"** in PLN and USD (yearly→monthly = /12; convert
+currencies with the latest FX like the net-worth live view), counting only `active` items.
+
 ## Layout
 
 ```

@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type CategoryType, type Currency } from "../lib/api";
+import { api, type Category, type CategoryType, type Currency } from "../lib/api";
 import { qk } from "../lib/queryClient";
 import { CURRENCIES } from "../lib/money";
 import { Field, Spinner, StateMsg } from "../components/ui";
@@ -11,11 +11,10 @@ interface EditState {
   name: string;
   type: CategoryType;
   currency: Currency;
-  sortOrder: number;
   hidden: boolean;
 }
 
-const EMPTY: EditState = { id: null, name: "", type: "asset", currency: "PLN", sortOrder: 0, hidden: false };
+const EMPTY: EditState = { id: null, name: "", type: "asset", currency: "PLN", hidden: false };
 
 export default function Categories() {
   const qc = useQueryClient();
@@ -25,6 +24,32 @@ export default function Categories() {
     queryFn: () => api.listCategories({ includeHidden: revealed }),
   });
   const [edit, setEdit] = useState<EditState | null>(null);
+
+  // Local ordering state (array of ids). Dragging reorders this optimistically,
+  // then persists via PUT /api/categories/reorder.
+  const [order, setOrder] = useState<number[]>([]);
+  const bodyRef = useRef<HTMLTableSectionElement | null>(null);
+  const dragRef = useRef<{ id: number; pointerId: number } | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+
+  // Sync local order whenever the server list changes.
+  useEffect(() => {
+    const ids = (list.data ?? [])
+      .slice()
+      .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
+      .map((c) => c.id);
+    setOrder((prev) => (sameSet(prev, ids) ? prev : ids));
+  }, [list.data]);
+
+  const byId = useMemo(() => {
+    const m = new Map<number, Category>();
+    for (const c of list.data ?? []) m.set(c.id, c);
+    return m;
+  }, [list.data]);
+
+  const sorted = order
+    .map((id) => byId.get(id))
+    .filter((c): c is NonNullable<typeof c> => c !== undefined);
 
   const createMut = useMutation({
     mutationFn: (b: Parameters<typeof api.createCategory>[0]) => api.createCategory(b),
@@ -39,17 +64,16 @@ export default function Categories() {
     mutationFn: (id: number) => api.deleteCategory(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: qk.categories }); qc.invalidateQueries({ queryKey: qk.networth() }); qc.invalidateQueries({ queryKey: qk.networthLive }); qc.invalidateQueries({ queryKey: qk.history }); },
   });
-
-  const sorted = [...(list.data ?? [])].sort(
-    (a, b) => a.sort_order - b.sort_order || a.id - b.id,
-  );
+  const reorderMut = useMutation({
+    mutationFn: (ids: number[]) => api.reorderCategories(ids),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.categories }); qc.invalidateQueries({ queryKey: qk.networth() }); qc.invalidateQueries({ queryKey: qk.networthLive }); qc.invalidateQueries({ queryKey: qk.history }); },
+  });
 
   async function onSave(s: EditState) {
     const body = {
       name: s.name,
       type: s.type,
       currency: s.currency,
-      sort_order: s.sortOrder,
       hidden: s.hidden ? 1 : 0,
     };
     if (s.id == null) createMut.mutate(body);
@@ -57,6 +81,54 @@ export default function Categories() {
   }
 
   async function onDeletePlain(id: number) { await deleteMut.mutateAsync(id); }
+
+  // ---- pointer-events drag reorder (mouse + touch) ----
+  function onHandlePointerDown(e: React.PointerEvent, id: number) {
+    // Only react to a "primary" pointer press to avoid edge cases.
+    if (e.button !== undefined && e.button !== 0) return;
+    dragRef.current = { id, pointerId: e.pointerId };
+    setDraggingId(id);
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* noop */ }
+    e.preventDefault();
+  }
+
+  function onHandlePointerMove(e: React.PointerEvent) {
+    const d = dragRef.current;
+    if (!d) return;
+    const rows = bodyRef.current?.querySelectorAll<HTMLTableRowElement>("tr");
+    if (!rows) return;
+    // Insert before the first row whose midpoint is below the cursor; default to end.
+    let targetIndex = rows.length;
+    rows.forEach((r, i) => {
+      const rect = r.getBoundingClientRect();
+      const mid = rect.top + rect.height / 2;
+      if (e.clientY < mid && i < targetIndex) targetIndex = i;
+    });
+    if (targetIndex === rows.length && rows.length === 0) return;
+    setOrder((prev) => {
+      const from = prev.indexOf(d.id);
+      if (from === -1) return prev;
+      let to = targetIndex;
+      if (from < to) to -= 1; // removing the source shifts later indices left
+      if (to < 0) to = 0;
+      if (to === from) return prev;
+      const next = prev.slice();
+      next.splice(from, 1);
+      next.splice(to, 0, d.id);
+      return next;
+    });
+  }
+
+  function onHandlePointerUp(e: React.PointerEvent) {
+    const d = dragRef.current;
+    dragRef.current = null;
+    setDraggingId(null);
+    if (d) {
+      try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch { /* noop */ }
+      // Persist the current order (server sets sort_order = index).
+      reorderMut.mutate(order.length ? order : sorted.map((c) => c.id));
+    }
+  }
 
   return (
     <div className="page">
@@ -66,23 +138,53 @@ export default function Categories() {
       </div>
 
       {list.isLoading ? <Spinner /> : null}
-      {sorted.length === 0 && !list.isLoading ? (
+      {list.data && sorted.length === 0 ? (
         <StateMsg>Brak kategorii. Dodaj pierwszą.</StateMsg>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: "auto" }}>
           <table className="tbl">
             <thead>
               <tr>
+                <th style={{ width: 28 }}></th>
                 <th>Nazwa</th>
                 <th>Typ</th>
                 <th>Waluta</th>
-                <th className="num">Kolejność</th>
                 <th></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={bodyRef}>
               {sorted.map((c) => (
-                <tr key={c.id} style={c.hidden ? { background: "var(--surface-2)" } : undefined}>
+                <tr
+                  key={c.id}
+                  style={{
+                    background: c.hidden ? "var(--surface-2)" : undefined,
+                    opacity: draggingId === c.id ? 0.6 : 1,
+                    touchAction: "pan-y",
+                  }}
+                >
+                  <td style={{ padding: 0, verticalAlign: "middle" }}>
+                    <span
+                      role="button"
+                      aria-label="Przeciągnij, by zmienić kolejność"
+                      title="Przeciągnij"
+                      onPointerDown={(e) => onHandlePointerDown(e, c.id)}
+                      onPointerMove={onHandlePointerMove}
+                      onPointerUp={onHandlePointerUp}
+                      onPointerCancel={onHandlePointerUp}
+                      style={{
+                        display: "inline-block",
+                        width: 24,
+                        height: "100%",
+                        padding: "10px 0",
+                        textAlign: "center",
+                        cursor: "grab",
+                        userSelect: "none",
+                        touchAction: "none",
+                      }}
+                    >
+                      ≡
+                    </span>
+                  </td>
                   <td>
                     {c.name}
                     {c.hidden ? <span className="pill" style={{ fontSize: "0.66rem", marginLeft: 4 }} title="ukryta">ukryta</span> : null}
@@ -93,11 +195,10 @@ export default function Categories() {
                     </span>
                   </td>
                   <td>{c.currency}</td>
-                  <td className="num">{c.sort_order}</td>
                   <td>
                     <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                       <button className="btn sm" onClick={() =>
-                        setEdit({ id: c.id, name: c.name, type: c.type, currency: c.currency, sortOrder: c.sort_order, hidden: c.hidden === 1 })
+                        setEdit({ id: c.id, name: c.name, type: c.type, currency: c.currency, hidden: c.hidden === 1 })
                       }>Edytuj</button>
                       <button className="btn danger sm" disabled={deleteMut.isPending}
                         onClick={() => { if (confirm(`Usunąć kategorię „${c.name}”?`)) onDeletePlain(c.id); }}
@@ -110,6 +211,9 @@ export default function Categories() {
           </table>
         </div>
       )}
+      <div className="muted" style={{ fontSize: "0.8rem", marginTop: 6 }}>
+        Przeciągnij uchwyt ≡ przy wierszu, aby zmienić kolejność.
+      </div>
 
       {edit ? (
         <EditModal
@@ -123,6 +227,13 @@ export default function Categories() {
       ) : null}
     </div>
   );
+}
+
+function sameSet(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = new Set(a);
+  for (const x of b) if (!sa.has(x)) return false;
+  return true;
 }
 
 function EditModal({
@@ -166,12 +277,6 @@ function EditModal({
             <select className="field" value={s.currency} onChange={(e) => setS({ ...s, currency: e.target.value as Currency })}>
               {CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
-          </Field>
-        </div>
-        <div style={{ width: 120 }}>
-          <Field label="Kolejność">
-            <input className="field" type="number" value={s.sortOrder}
-              onChange={(e) => setS({ ...s, sortOrder: Number(e.target.value) || 0 })} />
           </Field>
         </div>
         {allowHidden ? (

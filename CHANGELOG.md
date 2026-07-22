@@ -4,6 +4,30 @@ All notable changes to **portfel** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and the single source of truth is the
 `version` field in the root `package.json`. Newest entries first.
 
+## 0.4.0 — 2026-07-23
+
+### Added
+- **Snapshoty** — new nav tab + page (`/snapshots`) listing all snapshots
+  newest-first with Miesiąc / Dochód / Majątek netto (PLN & USD) per month,
+  computed from `/api/networth/history`. Each row has **Edytuj**
+  (→ `/snapshot/:id`) and **Usuń**, plus a **+ Nowy snapshot** button linking
+  to `/snapshot`. The existing `/snapshot` and `/snapshot/:id` edit routes are
+  unchanged.
+- **Notatnik (dev notes).** Backend `GET /api/notes` → `{ text }` and
+  `PUT /api/notes { text }`, persisted in a new singleton `notes` table kept
+  OUT of `/api/settings`. The Settings page shows a
+  „Notatnik — co dodać / poprawić” textarea with a „Zapisz notatkę” button.
+- **Drag-and-drop category ordering.** New `PUT /api/categories/reorder`
+  `{ ids: number[] }` sets `sort_order = index` in one transaction; creating a
+  category defaults `sort_order` to `MAX(sort_order) + 1`. The Categories page
+  drops the numeric „Kolejność” column and the sort-order field, and replaces
+  them with a `≡` drag handle using pointer events (works on both mouse and
+  touch — not HTML5 `draggable`, which ignores touch). Reorder is optimistic
+  locally and persisted on drop.
+
+### Changed
+- Root `package.json` version bumped to `0.4.0`.
+
 ## 0.3.1 — 2026-07-22
 
 ### Fixed

@@ -16,6 +16,7 @@ export const qk = {
   snapshot: (id: number | "new" | undefined) => ["snapshots", id] as const,
   debts: ["debts"] as const,
   settings: ["settings"] as const,
+  notes: ["notes"] as const,
   networth: (snapshot?: number) => ["networth", snapshot ?? "current"] as const,
   networthLive: ["networth", "live"] as const,
   history: ["networth", "history"] as const,

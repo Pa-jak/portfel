@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
+import Snapshots from "./pages/Snapshots";
 import SnapshotEdit from "./pages/SnapshotEdit";
 import Categories from "./pages/Categories";
 import Debts from "./pages/Debts";
@@ -10,6 +11,7 @@ import { initPwa } from "./lib/pwa";
 const NAV = [
   { to: "/", label: "Pulpit", ico: "▤", end: true },
   { to: "/snapshot", label: "Snapshot", ico: "📅", end: false },
+  { to: "/snapshots", label: "Snapshoty", ico: "🗓", end: false },
   { to: "/categories", label: "Kategorie", ico: "🏷", end: false },
   { to: "/debts", label: "Długi", ico: "💶", end: false },
   { to: "/settings", label: "Ustawienia", ico: "⚙", end: false },
@@ -43,6 +45,7 @@ export default function App() {
       </nav>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/snapshots" element={<Snapshots />} />
         <Route path="/snapshot" element={<SnapshotEdit />} />
         <Route path="/snapshot/:id" element={<SnapshotEdit />} />
         <Route path="/categories" element={<Categories />} />

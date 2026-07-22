@@ -135,6 +135,8 @@ export const api = {
   updateCategory: (id: number, b: CategoryInput) =>
     req<Category>("PUT", `/api/categories/${id}`, b),
   deleteCategory: (id: number) => req<{ ok: boolean }>("DELETE", `/api/categories/${id}`),
+  reorderCategories: (ids: number[]) =>
+    req<{ ok: boolean }>("PUT", "/api/categories/reorder", { ids }),
 
   // snapshots
   listSnapshots: () => req<Snapshot[]>("GET", "/api/snapshots"),
@@ -154,6 +156,10 @@ export const api = {
   // settings
   getSettings: () => req<Settings>("GET", "/api/settings"),
   putSettings: (b: Settings) => req<{ ok: boolean }>("PUT", "/api/settings", b),
+
+  // notes (dev notepad — kept out of /api/settings)
+  getNotes: () => req<{ text: string }>("GET", "/api/notes"),
+  putNotes: (text: string) => req<{ ok: boolean }>("PUT", "/api/notes", { text }),
 
   // net worth
   getNetWorth: (opts?: { snapshot?: number; includeHidden?: boolean }) => {

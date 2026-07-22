@@ -11,6 +11,7 @@ import netWorthRoutes from "./routes/networth";
 import fxRoutes from "./routes/fx";
 import versionRoutes from "./routes/version";
 import searchRoutes from "./routes/search";
+import notesRoutes from "./routes/notes";
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? "0.0.0.0";
@@ -31,6 +32,7 @@ async function buildServer(): Promise<FastifyInstance> {
   await app.register(fxRoutes, { prefix: "" });
   await app.register(versionRoutes, { prefix: "" });
   await app.register(searchRoutes, { prefix: "" });
+  await app.register(notesRoutes, { prefix: "" });
 
   app.get("/api/health", async () => ({ ok: true, ts: new Date().toISOString() }));
 
