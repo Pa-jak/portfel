@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type Currency } from "../lib/api";
 import { qk } from "../lib/queryClient";
 import { CURRENCIES } from "../lib/money";
-import { Spinner, StateMsg, Field } from "../components/ui";
+import { Spinner, StateMsg } from "../components/ui";
 import { triggerUpdate } from "../lib/pwa";
 
 export default function Settings() {
@@ -13,8 +13,6 @@ export default function Settings() {
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [baseCurrencies, setBaseCurrencies] = useState<string>("PLN,USD");
   const [accountCurrencies, setAccountCurrencies] = useState<string>("PLN,USD,EUR,NOK");
-  const [revealPhrase, setRevealPhrase] = useState<string>("Alohomora");
-  const [hidePhrase, setHidePhrase] = useState<string>("Obliviate");
   const [loaded, setLoaded] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -23,8 +21,6 @@ export default function Settings() {
       setLoaded(true);
       setBaseCurrencies(settings.data.base_currencies ?? "PLN,USD");
       setAccountCurrencies(settings.data.account_currencies ?? "PLN,USD,EUR,NOK");
-      setRevealPhrase(settings.data.reveal_phrase ?? "Alohomora");
-      setHidePhrase(settings.data.hide_phrase ?? "Obliviate");
     }
   }, [loaded, settings.data]);
 
@@ -96,8 +92,6 @@ export default function Settings() {
     saveMut.mutate({
       base_currencies: baseCurrencies,
       account_currencies: accountCurrencies,
-      reveal_phrase: revealPhrase,
-      hide_phrase: hidePhrase,
     });
   }
 
@@ -152,29 +146,6 @@ export default function Settings() {
         </div>
       </div>
 
-      <div className="card" style={{ marginTop: 12 }}>
-        <h3 className="h3">Hasła ukrywania (widok)</h3>
-        <p className="muted" style={{ fontSize: "0.82rem", marginTop: 0 }}>
-          Wpisanie hasła odkrywającego w polu „Szukaj / dodaj” pokazuje ukryte
-          kategorie i długi. Hasła ukrywającego chowa je z powrotem. To NIE jest
-          szyfrowanie — tylko ukrycie widoku; dane leżą w bazie jawne.
-        </p>
-        <div className="row" style={{ gap: 12, marginTop: 8 }}>
-          <div className="grow">
-            <Field label="Hasło odkrywające">
-              <input className="field" value={revealPhrase}
-                onChange={(e) => setRevealPhrase(e.target.value)} />
-            </Field>
-          </div>
-          <div className="grow">
-            <Field label="Hasło ukrywające">
-              <input className="field" value={hidePhrase}
-                onChange={(e) => setHidePhrase(e.target.value)} />
-            </Field>
-          </div>
-        </div>
-      </div>
-
       {msg ? (
         <div className={`card ${msg.kind === "ok" ? "ok" : "err"}`} style={{ marginTop: 12 }}>{msg.text}</div>
       ) : null}
@@ -190,8 +161,7 @@ export default function Settings() {
       </div>
 
       <div className="card muted" style={{ marginTop: 12, fontSize: "0.82rem" }}>
-        Ukrywanie widoku działa również przez zwykłe http://IP w sieci lokalnej.
-        Instalacja PWA nadal zaley na bezpiecznym kontekście (HTTPS lub localhost).
+        Instalacja PWA zależy od bezpiecznego kontekstu (HTTPS lub localhost).
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>

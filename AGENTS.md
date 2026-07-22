@@ -49,11 +49,18 @@ over plain HTTP. (This replaces the earlier encrypted-vault design; remove that 
 
 - Categories and debts have a `hidden` INTEGER (0/1) column (already in the schema) — this IS the hiding
   mechanism. Hidden rows are stored normally in the plain tables like any other row, just flagged.
-- A top-of-dashboard input labeled **"Szukaj / dodaj"** is the trigger. Typing the **reveal phrase**
-  (default `Alohomora`) sets a client-side `revealed = true`; typing the **hide phrase** (default
-  `Obliviate`) sets `revealed = false`. `revealed` is plain React state (resets to false on reload).
-- Store the two phrases in the `settings` table (`reveal_phrase` = `Alohomora`, `hide_phrase` =
-  `Obliviate`) so they are editable in Settings. (Security is not a goal here, so plain storage is fine.)
+- A top-of-dashboard input labeled **"Szukaj / dodaj"** is the trigger. On submit the frontend POSTs the
+  text to **`POST /api/search`** `{ q }`; the server compares it to the phrases and returns
+  `{ action: 'reveal' | 'hide' | 'none' }`. `reveal` sets client-side `revealed = true`, `hide` sets it
+  `false`, `none` is a no-op (indistinguishable from an ordinary search). `revealed` is plain React state
+  (resets to false on reload).
+- **The phrases must leave NO trace in the app.** They are configured ONLY server-side via env vars
+  `PORTFEL_REVEAL_PHRASE` (default `Alohomora`) and `PORTFEL_HIDE_PHRASE` (default `Obliviate`), read by
+  the backend. They are NEVER stored in the `settings` table, NEVER returned by any API (not by
+  `/api/settings`), NEVER sent to the client, and there is NO UI anywhere in the app to view or change
+  them (no field, no hint, no explanatory text — not even in Settings). Changing a phrase is done only on
+  the server (edit a gitignored `.env` and restart). Nothing in the locked app may reveal that a hiding
+  feature exists.
 - **Backend:** list endpoints exclude hidden rows by default and include them only with `?includeHidden=1`
   (`GET /api/categories?includeHidden=1`, `GET /api/debts?includeHidden=1`). `GET /api/networth`,
   `/api/networth/live`, and `/api/networth/history` likewise take `?includeHidden=1` to add hidden items
@@ -79,7 +86,8 @@ excluding hidden by default and including hidden when `?includeHidden=1`. The Da
 2. **Snapshot edit** — pick a month, enter/update each category value + monthly income.
 3. **Categories** — CRUD, asset/liability, currency, ordering.
 4. **Debts** — two sections (owed to me / I owe), CRUD, mark settled.
-5. **Settings** — reveal/hide phrases, base/helper currencies, manual FX refresh, version & update check.
+5. **Settings** — base/helper currencies, manual FX refresh, version & update check.
+   (NO reveal/hide phrase UI — hiding must leave no trace in the app; phrases are server-side env only.)
 
 ## Layout
 

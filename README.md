@@ -102,12 +102,32 @@ docker compose start
 
 ### Uwaga o HTTPS i PWA
 
-Sama aplikacja (w tym ukrywanie kategorii przez frazę `Alohomora`/`Obliviate`)
-poprawnie działa przez zwykłe `http://SERVER_IP:3000`. Natomiast **instalacja
-PWA** na urządzeniach mobilnych z ekranu domowego wymaga bezpiecznego kontekstu
-(HTTPS lub `localhost`). Aby możliwa była instalacja PWA przez LAN, postaw
-aplikację za reverse proxy z TLS (np. Caddy/Nginx + certyfikat) wystawiającym
-HTTPS na domenę/URL, który wskazuje na `http://SERVER_IP:3000`.
+Sama aplikacja poprawnie działa przez zwykłe `http://SERVER_IP:3000`.
+Natomiast **instalacja PWA** na urządzeniach mobilnych z ekranu domowego wymaga
+bezpiecznego kontekstu (HTTPS lub `localhost`). Aby możliwa była instalacja PWA
+przez LAN, postaw aplikację za reverse proxy z TLS (np. Caddy/Nginx +
+certyfikat) wystawiającym HTTPS na domenę/URL, który wskazuje na
+`http://SERVER_IP:3000`.
+
+### Konfiguracja serwerowa (zmienne środowiskowe)
+
+Niektóre ustawienia są konfigurowane **wyłącznie po stronie serwera** przez
+zmienne środowiskowe (nigdy w aplikacji). Zmienia się je edytując
+gitignorowany plik `.env` obok `docker-compose.yml` i uruchamiając ponownie:
+
+```bash
+# .env  (gitignored — nie commituj)
+# Brak zmiennej lub pusta wartość -> użyto domyślnych (Alohomora / Obliviate).
+PORTFEL_REVEAL_PHRASE=twoje-hasło-odkrywające
+PORTFEL_HIDE_PHRASE=twoje-hasło-ukrywające
+
+docker compose up -d
+```
+
+Frazy te **nie są nigdzie przechowywane w bazie ani zwracane przez API** i
+zmienia się je **wyłącznie** edytując `.env` + `docker compose up -d` — nigdy
+w aplikacji. Aplikacja nie daje żadnego śladu, że taka funkcja istnieje,
+dopóki nie zostanie odkryta.
 
 ## Stage status
 

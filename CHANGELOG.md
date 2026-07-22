@@ -4,6 +4,45 @@ All notable changes to **portfel** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and the single source of truth is the
 `version` field in the root `package.json`. Newest entries first.
 
+## 0.3.0 — 2026-07-22
+
+### Changed
+- Reveal/hide phrases moved fully server-side. They are configured ONLY via env
+  vars `PORTFEL_REVEAL_PHRASE` (default `Alohomora`) and `PORTFEL_HIDE_PHRASE`
+  (default `Obliviate`) read by the backend; they are never stored in the
+  `settings` table, never returned by any API, and never sent to the client.
+- Added `POST /api/search` with body `{ q: string }` returning
+  `{ action: 'reveal' | 'hide' | 'none' }`. This is the only place where the
+  typed text is compared to the configured phrases (exact, trimmed match);
+  `'none'` is indistinguishable from an ordinary search. The frontend
+  "Szukaj / dodaj" input calls it and sets a plain `revealed` boolean
+  accordingly (resets to false on reload).
+
+### Removed
+- `settings.seedSettings` no longer seeds `reveal_phrase` / `hide_phrase`.
+  `GET /api/settings` defensively filters those keys out of the response even
+  if present in the DB, and `PUT /api/settings` (and `PUT /api/settings/:key`)
+  reject them.
+- Removed the reveal/hide phrases section from the Settings UI entirely —
+  the explanatory text, the two input fields, their state, and the
+  `reveal_phrase` / `hide_phrase` keys in the settings save payload. There is
+  now no UI (and no explanatory text) anywhere in the app that hints that a
+  hiding feature exists when nothing is revealed.
+- `web/src/lib/vault.tsx` (`RevealProvider`): removed the `DEFAULT_*_PHRASE`
+  constants, the client-side phrase state, the `getSettings` fetch, and the
+  live-sync `portfel:settings-updated` listener. The context value is now
+  `{ revealed, submitPhrase }` and `submitPhrase(text)` is async, calling
+  `api.search(text)` and updating `revealed` from the returned `action`.
+  Old `revealPhrase` / `hidePhrase` properties were removed from the context.
+
+### Added
+- `docker-compose.yml` passes optional `PORTFEL_REVEAL_PHRASE` /
+  `PORTFEL_HIDE_PHRASE` through from host env (empty -> backend uses its
+  defaults). The literal phrases are not hardcoded in compose.
+- `.env` is gitignored; the reveal/hide phrases are changed ONLY by editing a
+  server-side gitignored `.env` and re-running `docker compose up -d` — never
+  in the app.
+
 ## 0.2.2 — 2026-07-22
 
 ### Fixed

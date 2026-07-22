@@ -13,6 +13,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - HOST=0.0.0.0
+      - PORTFEL_REVEAL_PHRASE=${PORTFEL_REVEAL_PHRASE:-}
+      - PORTFEL_HIDE_PHRASE=${PORTFEL_HIDE_PHRASE:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:3000/api/health"]

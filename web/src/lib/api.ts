@@ -176,4 +176,7 @@ export const api = {
 
   // version
   getVersion: () => req<{ version: string }>("GET", "/api/version"),
+
+  // search (reveal/hide trigger — server compares the typed text to the env-configured phrases)
+  search: (q: string) => req<{ action: "reveal" | "hide" | "none" }>("POST", "/api/search", { q }),
 };
