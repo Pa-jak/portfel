@@ -17,6 +17,7 @@ export const qk = {
   debts: ["debts"] as const,
   settings: ["settings"] as const,
   notes: ["notes"] as const,
+  fixedCosts: ["fixed-costs"] as const,
   networth: (snapshot?: number) => ["networth", snapshot ?? "current"] as const,
   networthLive: ["networth", "live"] as const,
   history: ["networth", "history"] as const,

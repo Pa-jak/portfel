@@ -5,6 +5,7 @@ import Snapshots from "./pages/Snapshots";
 import SnapshotEdit from "./pages/SnapshotEdit";
 import Categories from "./pages/Categories";
 import Debts from "./pages/Debts";
+import FixedCosts from "./pages/FixedCosts";
 import Settings from "./pages/Settings";
 import { initPwa } from "./lib/pwa";
 
@@ -14,6 +15,7 @@ const NAV = [
   { to: "/snapshots", label: "Snapshoty", ico: "🗓", end: false },
   { to: "/categories", label: "Kategorie", ico: "🏷", end: false },
   { to: "/debts", label: "Długi", ico: "💶", end: false },
+  { to: "/fixed-costs", label: "Koszty stałe", ico: "🧾", end: false },
   { to: "/settings", label: "Ustawienia", ico: "⚙", end: false },
 ];
 
@@ -50,6 +52,7 @@ export default function App() {
         <Route path="/snapshot/:id" element={<SnapshotEdit />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/debts" element={<Debts />} />
+        <Route path="/fixed-costs" element={<FixedCosts />} />
         <Route path="/settings" element={<Settings />} />
       </Routes>
       <footer className="app-footer muted">v{__APP_VERSION__}</footer>

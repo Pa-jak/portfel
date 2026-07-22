@@ -4,6 +4,7 @@
 export type CategoryType = "asset" | "liability";
 export type Currency = "PLN" | "USD" | "EUR" | "NOK";
 export type DebtDirection = "owed_to_me" | "i_owe";
+export type FixedCostCycle = "monthly" | "yearly";
 
 export interface Category {
   id: number;
@@ -46,6 +47,22 @@ export interface Debt {
   hidden: number;
   settled: number;
   created_at: string;
+}
+
+export interface FixedCost {
+  id: number;
+  name: string;
+  amount_minor: number;
+  currency: Currency;
+  cycle: FixedCostCycle;
+  note: string | null;
+  active: number;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface FxRatesResult {
+  rates: Record<string, Record<string, number>>;
 }
 
 export type Settings = Record<string, string>;
@@ -99,6 +116,15 @@ export interface DebtInput {
   note?: string | null;
   settled?: number;
   hidden?: number;
+}
+
+export interface FixedCostInput {
+  name: string;
+  amount_minor?: number;
+  currency: Currency;
+  cycle?: FixedCostCycle;
+  note?: string | null;
+  active?: number | boolean;
 }
 
 function withIncludeHidden(includeHidden: boolean | undefined): string {
@@ -176,6 +202,14 @@ export const api = {
 
   // fx
   refreshFx: () => req<{ ok: boolean }>("POST", "/api/fx/refresh"),
+  getFxRates: () => req<FxRatesResult>("GET", "/api/fx/rates"),
+
+  // fixed costs (recurring bills/subscriptions — separate from net worth)
+  listFixedCosts: () => req<FixedCost[]>("GET", "/api/fixed-costs"),
+  createFixedCost: (b: FixedCostInput) => req<FixedCost>("POST", "/api/fixed-costs", b),
+  updateFixedCost: (id: number, b: FixedCostInput) =>
+    req<FixedCost>("PUT", `/api/fixed-costs/${id}`, b),
+  deleteFixedCost: (id: number) => req<{ ok: boolean }>("DELETE", `/api/fixed-costs/${id}`),
 
   // health
   health: () => req<{ ok: boolean; ts: string }>("GET", "/api/health"),

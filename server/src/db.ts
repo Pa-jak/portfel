@@ -5,6 +5,7 @@ import fs from "node:fs";
 export type CategoryType = "asset" | "liability";
 export type Currency = "PLN" | "USD" | "EUR" | "NOK";
 export type DebtDirection = "owed_to_me" | "i_owe";
+export type FixedCostCycle = "monthly" | "yearly";
 
 export const SUPPORTED_CURRENCIES: Currency[] = ["PLN", "USD", "EUR", "NOK"];
 export const BASE_CURRENCIES: Currency[] = ["PLN", "USD"];
@@ -101,6 +102,19 @@ function migrate(db: Database.Database): void {
       id   INTEGER PRIMARY KEY CHECK(id = 1),
       text TEXT    NOT NULL DEFAULT ''
     );
+
+    -- Fixed costs (recurring bills / subscriptions). SEPARATE from net worth.
+    CREATE TABLE IF NOT EXISTS fixed_costs (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      name          TEXT    NOT NULL,
+      amount_minor  INTEGER NOT NULL DEFAULT 0,
+      currency      TEXT    NOT NULL CHECK(currency IN ('PLN','USD','EUR','NOK')),
+      cycle         TEXT    NOT NULL DEFAULT 'monthly' CHECK(cycle IN ('monthly','yearly')),
+      note          TEXT,
+      active        INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+      sort_order    INTEGER NOT NULL DEFAULT 0,
+      created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    );
   `);
 
   seedSettings(db);
@@ -173,4 +187,15 @@ export interface SettingsRow {
 export interface NotesRow {
   id: number;
   text: string;
+}
+export interface FixedCostRow {
+  id: number;
+  name: string;
+  amount_minor: number;
+  currency: Currency;
+  cycle: FixedCostCycle;
+  note: string | null;
+  active: number;
+  sort_order: number;
+  created_at: string;
 }

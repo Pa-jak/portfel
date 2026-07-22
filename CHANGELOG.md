@@ -4,6 +4,33 @@ All notable changes to **portfel** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and the single source of truth is the
 `version` field in the root `package.json`. Newest entries first.
 
+## 0.5.0 — 2026-07-23
+
+### Added
+- **Koszty stałe (Fixed costs)** — new nav tab (🧾) + page (`/fixed-costs`) to
+  track recurring bills/subscriptions. SEPARATE from net worth (a spending
+  tracker, not assets).
+  - Backend: new `fixed_costs` table
+    `(id, name, amount_minor, currency, cycle CHECK('monthly'|'yearly') default
+    'monthly', note, active INTEGER default 1, sort_order INTEGER default 0,
+    created_at)` with a `FixedCostRow` interface. New route
+    `server/src/routes/fixedCosts.ts` exposing `GET/POST /api/fixed-costs` and
+    `PUT/DELETE /api/fixed-costs/:id` (fields name, amount_minor, currency,
+    cycle, note, active), registered in `server/src/index.ts`.
+  - Frontend: `web/src/pages/FixedCosts.tsx` lists items in a table
+    (Nazwa, Kwota, Waluta, Cykl miesięcznie/rocznie, Aktywny toggle, Notatka,
+    Edytuj/Usuń) plus an add/edit form (name, amount MoneyInput, currency,
+    cycle select, active checkbox, note). A **„Podsumowanie”** card shows
+    **„Miesięcznie razem”** and **„Rocznie razem”** in PLN and USD, counting
+    only `active` items (yearly→monthly = /12, monthly→yearly = ×12), with
+    currencies converted via `GET /api/fx/rates` (added `api.getFxRates`,
+    re-added where missing) like the Dashboard live view. Money is integer
+    minor units throughout; formatting via `formatMinor`.
+  - Polish UI.
+
+### Changed
+- Root `package.json` version bumped to `0.5.0`.
+
 ## 0.4.0 — 2026-07-23
 
 ### Added
