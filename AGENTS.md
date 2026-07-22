@@ -38,52 +38,48 @@ Frontend is a PWA (installable on desktop and mobile). Read this whole file befo
 
 `net = sum(assets) - sum(liabilities) + sum(owed_to_me active debts) - sum(i_owe active debts)`,
 each converted from its native currency to PLN and USD using the relevant snapshot's stored FX
-rates (or latest cached rates for the live/current view). When the vault is **locked**, hidden
-categories/debts are excluded entirely (plausible deniability). When unlocked, the frontend adds
-them locally to the displayed totals.
+rates (or latest cached rates for the live/current view). By default hidden categories/debts are
+excluded from the totals; when the user has revealed them (see below), they are included.
 
-## Secret vault (plausible deniability) — critical feature
+## Hidden categories (view-only hiding — NOT encryption)
 
-Threat model: the DB and the running app must give NO hint that hidden data exists. Achieve this by
-storing hidden data ONLY as an opaque encrypted blob and by NEVER storing the magic phrase anywhere.
+The requirement is simple **visual hiding**, not cryptographic security: some categories/debts are
+hidden from the normal view and revealed by typing a phrase. No encryption, no Web Crypto — so it works
+over plain HTTP. (This replaces the earlier encrypted-vault design; remove that crypto code.)
 
-- The app has NO login. A top-of-dashboard input labeled like a normal **"Szukaj / dodaj"** field is
-  the trigger. It behaves as a real search box for normal input; the vault reaction is a side effect.
-- **Unlock = successful decryption (no stored phrase).** When the user submits text in that field,
-  the frontend fetches `secret_blob` (salt, iv, ciphertext), derives an AES-GCM key with **PBKDF2**
-  (Web Crypto `crypto.subtle`) from `typedText + salt`, and TRIES to decrypt. If the GCM tag verifies,
-  it was the right phrase → unlock: hold the decrypted hidden categories/values/debts **in memory only**
-  and add them to the displayed totals. If it fails, do nothing special (just normal search) — so a
-  wrong word is indistinguishable from an ordinary search. The user's chosen passphrase (default the
-  user sets is `Alohomora`) is therefore never stored — only its ability to decrypt proves it.
-- **Lock:** typing the lock phrase `Obliviate` (a client-side constant, not a secret) wipes the
-  decrypted data from memory and recomputes totals without it. Also auto-lock on page reload/unload.
-- **Do NOT store `vault_unlock_phrase` / `vault_lock_phrase` in the `settings` table** — that would leak
-  the magic word to anyone reading the DB. Remove them from the db seed. `Obliviate` may be a frontend const.
-- **Hidden items live ONLY inside the encrypted blob.** Never write hidden categories/debts/values into
-  the plain `categories` / `snapshot_values` / `debts` tables. (The `hidden` columns that already exist in
-  the schema must stay `0`/unused for real data; do not rely on them for hiding.) The blob is a JSON doc:
-  `{ version, categories:[{tempId,name,type,currency,values:{'YYYY-MM':amount_minor}}], debts:[...] }`.
-- Server sees only ciphertext (base64) via the opaque `/api/secret-blob` GET/PUT/DELETE. It never decrypts.
-- Never persist the derived key or passphrase to localStorage/sessionStorage.
-- Note in README: Web Crypto `subtle` and PWA install require a **secure context** (HTTPS or
-  `localhost`); over plain `http://<lan-ip>` browsers may block them — document the HTTPS/reverse-proxy option.
+- Categories and debts have a `hidden` INTEGER (0/1) column (already in the schema) — this IS the hiding
+  mechanism. Hidden rows are stored normally in the plain tables like any other row, just flagged.
+- A top-of-dashboard input labeled **"Szukaj / dodaj"** is the trigger. Typing the **reveal phrase**
+  (default `Alohomora`) sets a client-side `revealed = true`; typing the **hide phrase** (default
+  `Obliviate`) sets `revealed = false`. `revealed` is plain React state (resets to false on reload).
+- Store the two phrases in the `settings` table (`reveal_phrase` = `Alohomora`, `hide_phrase` =
+  `Obliviate`) so they are editable in Settings. (Security is not a goal here, so plain storage is fine.)
+- **Backend:** list endpoints exclude hidden rows by default and include them only with `?includeHidden=1`
+  (`GET /api/categories?includeHidden=1`, `GET /api/debts?includeHidden=1`). `GET /api/networth`,
+  `/api/networth/live`, and `/api/networth/history` likewise take `?includeHidden=1` to add hidden items
+  to the totals. Create/update accept a `hidden` flag. So when NOT revealed, nothing hidden leaves the server.
+- **Frontend:** when `revealed`, the app requests with `includeHidden=1`, shows hidden rows in the
+  Categories/Debts/SnapshotEdit lists (subtly marked "ukryta"), the create/edit forms expose a `ukryta`
+  checkbox that sets the `hidden` flag through the normal API, and the Dashboard totals/chart include them.
+- **Remove entirely:** `web/src/lib/crypto.ts`, the encrypted-blob logic, the `secret_blob` table and its
+  `/api/secret-blob` route, and any Web Crypto usage. The old `web/src/lib/vault.tsx` becomes a thin
+  "reveal" context (plain boolean + phrase compare), or is replaced by one.
+- PWA install still benefits from HTTPS, but the app (including hiding) works fully over plain HTTP.
 
 ## Trend / history endpoint
 
-Add `GET /api/networth/history` to the backend: returns an array (oldest→newest) of
+`GET /api/networth/history` returns an array (oldest→newest) of
 `{ month, income_minor, income_currency, PLN, USD }` computed per snapshot from stamped snapshot FX,
-excluding hidden (there are none in plain tables). The Dashboard charts this; when the vault is
-unlocked the frontend adds each hidden category's per-month value on top, locally.
+excluding hidden by default and including hidden when `?includeHidden=1`. The Dashboard charts this.
 
 ## Screens (frontend)
 
 1. **Dashboard** — net worth in PLN & USD, month-over-month trend chart (Recharts), income vs
-   net-worth growth; the top "Szukaj / dodaj" input (vault trigger).
+   net-worth growth; the top "Szukaj / dodaj" input (reveal/hide trigger).
 2. **Snapshot edit** — pick a month, enter/update each category value + monthly income.
 3. **Categories** — CRUD, asset/liability, currency, ordering.
 4. **Debts** — two sections (owed to me / I owe), CRUD, mark settled.
-5. **Settings** — vault phrases, base/helper currencies, manual FX refresh.
+5. **Settings** — reveal/hide phrases, base/helper currencies, manual FX refresh, version & update check.
 
 ## Layout
 

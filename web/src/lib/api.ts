@@ -69,19 +69,12 @@ export interface HistoryPoint {
   USD: number;
 }
 
-export interface SecretBlob {
-  exists: boolean;
-  salt: string | null;
-  iv: string | null;
-  ciphertext: string | null;
-  updated_at: string | null;
-}
-
 export interface CategoryInput {
   name: string;
   type: CategoryType;
   currency: Currency;
   sort_order?: number;
+  hidden?: number;
 }
 
 export interface SnapshotValueInput {
@@ -105,12 +98,11 @@ export interface DebtInput {
   currency: Currency;
   note?: string | null;
   settled?: number;
+  hidden?: number;
 }
 
-export interface SecretBlobInput {
-  salt: string | null;
-  iv: string | null;
-  ciphertext: string | null;
+function withIncludeHidden(includeHidden: boolean | undefined): string {
+  return includeHidden ? "?includeHidden=1" : "";
 }
 
 async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
@@ -136,7 +128,8 @@ async function req<T>(method: string, url: string, body?: unknown): Promise<T> {
 
 export const api = {
   // categories
-  listCategories: () => req<Category[]>("GET", "/api/categories"),
+  listCategories: (opts?: { includeHidden?: boolean }) =>
+    req<Category[]>("GET", `/api/categories${withIncludeHidden(opts?.includeHidden)}`),
   getCategory: (id: number) => req<Category>("GET", `/api/categories/${id}`),
   createCategory: (b: CategoryInput) => req<Category>("POST", "/api/categories", b),
   updateCategory: (id: number, b: CategoryInput) =>
@@ -152,7 +145,8 @@ export const api = {
   deleteSnapshot: (id: number) => req<{ ok: boolean }>("DELETE", `/api/snapshots/${id}`),
 
   // debts
-  listDebts: () => req<Debt[]>("GET", "/api/debts"),
+  listDebts: (opts?: { includeHidden?: boolean }) =>
+    req<Debt[]>("GET", `/api/debts${withIncludeHidden(opts?.includeHidden)}`),
   createDebt: (b: DebtInput) => req<Debt>("POST", "/api/debts", b),
   updateDebt: (id: number, b: DebtInput) => req<Debt>("PUT", `/api/debts/${id}`, b),
   deleteDebt: (id: number) => req<{ ok: boolean }>("DELETE", `/api/debts/${id}`),
@@ -162,20 +156,20 @@ export const api = {
   putSettings: (b: Settings) => req<{ ok: boolean }>("PUT", "/api/settings", b),
 
   // net worth
-  getNetWorth: (snapshot?: number) =>
-    req<NetWorthResult>("GET", `/api/networth${snapshot != null ? `?snapshot=${snapshot}` : ""}`),
-  getNetWorthLive: () => req<NetWorthResult>("GET", "/api/networth/live"),
-  getNetWorthHistory: () => req<HistoryPoint[]>("GET", "/api/networth/history"),
+  getNetWorth: (opts?: { snapshot?: number; includeHidden?: boolean }) => {
+    const params = new URLSearchParams();
+    if (opts?.snapshot != null) params.set("snapshot", String(opts.snapshot));
+    if (opts?.includeHidden) params.set("includeHidden", "1");
+    const qs = params.toString();
+    return req<NetWorthResult>("GET", `/api/networth${qs ? `?${qs}` : ""}`);
+  },
+  getNetWorthLive: (opts?: { includeHidden?: boolean }) =>
+    req<NetWorthResult>("GET", `/api/networth/live${withIncludeHidden(opts?.includeHidden)}`),
+  getNetWorthHistory: (opts?: { includeHidden?: boolean }) =>
+    req<HistoryPoint[]>("GET", `/api/networth/history${withIncludeHidden(opts?.includeHidden)}`),
 
   // fx
   refreshFx: () => req<{ ok: boolean }>("POST", "/api/fx/refresh"),
-  getFxRates: () =>
-    req<{ rates: Record<string, Record<string, number>> }>("GET", "/api/fx/rates"),
-
-  // secret blob (opaque; server never decrypts)
-  getSecretBlob: () => req<SecretBlob>("GET", "/api/secret-blob"),
-  putSecretBlob: (b: SecretBlobInput) => req<{ ok: boolean }>("PUT", "/api/secret-blob", b),
-  deleteSecretBlob: () => req<{ ok: boolean }>("DELETE", "/api/secret-blob"),
 
   // health
   health: () => req<{ ok: boolean; ts: string }>("GET", "/api/health"),

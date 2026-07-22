@@ -4,6 +4,57 @@ All notable changes to **portfel** are documented here. Versions follow
 [Semantic Versioning](https://semver.org/) and the single source of truth is the
 `version` field in the root `package.json`. Newest entries first.
 
+## 0.2.0 — 2026-07-22
+
+Breaking simplification of the hiding feature, replacing the encrypted Web Crypto
+vault with simple view-only hiding over plain HTTP.
+
+### Breaking changes
+- Removed the encrypted `secret_blob` mechanism entirely: deleted the
+  `secret_blob` table, the `/api/secret-blob` route, and the client-side
+  Web Crypto (PBKDF2/AES-GCM) helpers (`web/src/lib/crypto.ts`,
+  `web/src/lib/fxConvert.ts`). The server no longer stores any ciphertext.
+- The "Szukaj / dodaj" trigger no longer unlocks/locks an encrypted blob.
+  Typing the reveal phrase sets a plain in-memory `revealed = true`; typing
+  the hide phrase resets it to `false`. `revealed` lives only in React state
+  and resets to false on reload.
+- `categories` and `debts` already had a `hidden INTEGER (0/1)` column; this is
+  now **the only hiding mechanism**. Hidden rows live in the plain tables,
+  just flagged. Security is NOT a goal here — only visual hiding.
+
+### Added
+- `settings.seedSettings` defaults: `reveal_phrase = "Alohomora"` and
+  `hide_phrase = "Obliviate"` (editable in Settings).
+- `?includeHidden=1` query parameter on list and totals endpoints:
+  - `GET /api/categories?includeHidden=1`
+  - `GET /api/debts?includeHidden=1`
+  - `GET /api/networth?includeHidden=1`
+  - `GET /api/networth/live?includeHidden=1`
+  - `GET /api/networth/history?includeHidden=1`
+  By default hidden rows (categories, debts) are excluded from listings and
+  their values/debts are excluded from PLN/USD totals; setting the flag
+  includes them in both.
+- `POST/PUT /api/categories` and `POST/PUT /api/debts` accept and persist a
+  `hidden` (0/1) field. So hidden management happens through the normal API.
+- Frontend `api.listCategories({ includeHidden })`, `api.listDebts({ includeHidden })`,
+  `api.getNetWorth({ includeHidden })`, `api.getNetWorthLive({ includeHidden })`,
+  `api.getNetWorthHistory({ includeHidden })` helpers.
+- Thin `RevealProvider`/`useReveal()` context (replaces `VaultProvider`/`useVault`):
+  fetches reveal/hide phrases from settings on mount, exposes `revealed`,
+  `revealPhrase`, `hidePhrase`, and `submitPhrase(text)`.
+- Dashboard, Categories, Debts and SnapshotEdit pages fetch with
+  `includeHidden=1` only when `revealed`, marking hidden rows with an
+  "ukryta" pill; the add/edit forms expose a `ukryna` checkbox (only when
+  revealed) that sets the `hidden` flag through the normal create/update API.
+- Settings page: editable `reveal_phrase` / `hide_phrase` fields persisted via
+  the settings API; the old "Zmień hasło" passphrase block is gone. Existing
+  base/helper currencies, manual FX refresh, and version + "Sprawdź
+  aktualizacje" sections are unchanged.
+
+### Removed
+- Web Crypto (`crypto.subtle`) usage on the client — works fully over plain
+  `http://<lan-ip>` now (PWA install still benefits from HTTPS).
+
 ## 0.1.0 — 2026-07-22
 
 Initial release of the self-hosted monthly net-worth tracker.

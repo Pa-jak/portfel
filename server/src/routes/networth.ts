@@ -24,7 +24,10 @@ interface NetResult {
 export default async function netWorthRoutes(app: FastifyInstance): Promise<void> {
   const db = getDb();
 
-  app.get<{ Querystring: { snapshot?: string } }>("/api/networth", async (req) => {
+  app.get<{ Querystring: { snapshot?: string; includeHidden?: string } }>("/api/networth", async (req) => {
+    const includeHidden = req.query.includeHidden === "1";
+    const hiddenFilter = includeHidden ? "" : "AND c.hidden = 0";
+    const debtHiddenFilter = includeHidden ? "" : "AND hidden = 0";
     let snapshotId: number | null;
     if (req.query.snapshot) {
       const id = Number(req.query.snapshot);
@@ -48,12 +51,12 @@ export default async function netWorthRoutes(app: FastifyInstance): Promise<void
       .prepare(
         `SELECT sv.amount_minor, sv.currency, c.type
          FROM snapshot_values sv JOIN categories c ON c.id = sv.category_id
-         WHERE sv.snapshot_id = ? AND c.hidden = 0`
+         WHERE sv.snapshot_id = ? ${hiddenFilter}`
       )
       .all(snapshotId) as { amount_minor: number; currency: Currency; type: "asset" | "liability" }[];
 
     const debts = db
-      .prepare("SELECT direction, amount_minor, currency FROM debts WHERE settled = 0 AND hidden = 0")
+      .prepare(`SELECT direction, amount_minor, currency FROM debts WHERE settled = 0 ${debtHiddenFilter}`)
       .all() as { direction: "owed_to_me" | "i_owe"; amount_minor: number; currency: Currency }[];
 
     let hasSnapshotFx = true;
@@ -103,13 +106,16 @@ export default async function netWorthRoutes(app: FastifyInstance): Promise<void
     } satisfies NetResult;
   });
 
-  app.get("/api/networth/history", async () => {
+  app.get<{ Querystring: { includeHidden?: string } }>("/api/networth/history", async (req) => {
+    const includeHidden = req.query.includeHidden === "1";
+    const hiddenFilter = includeHidden ? "" : "AND c.hidden = 0";
+    const debtHiddenFilter = includeHidden ? "" : "AND hidden = 0";
     const snaps = db
       .prepare("SELECT id, month, income_minor, income_currency FROM snapshots ORDER BY month ASC")
       .all() as { id: number; month: string; income_minor: number; income_currency: Currency }[];
 
     const debts = db
-      .prepare("SELECT direction, amount_minor, currency FROM debts WHERE settled = 0 AND hidden = 0")
+      .prepare(`SELECT direction, amount_minor, currency FROM debts WHERE settled = 0 ${debtHiddenFilter}`)
       .all() as { direction: "owed_to_me" | "i_owe"; amount_minor: number; currency: Currency }[];
 
     const out: HistoryPoint[] = [];
@@ -119,7 +125,7 @@ export default async function netWorthRoutes(app: FastifyInstance): Promise<void
         .prepare(
           `SELECT sv.amount_minor, sv.currency, c.type
            FROM snapshot_values sv JOIN categories c ON c.id = sv.category_id
-           WHERE sv.snapshot_id = ? AND c.hidden = 0`
+           WHERE sv.snapshot_id = ? ${hiddenFilter}`
         )
         .all(snap.id) as { amount_minor: number; currency: Currency; type: "asset" | "liability" }[];
 
@@ -156,14 +162,17 @@ export default async function netWorthRoutes(app: FastifyInstance): Promise<void
     return out;
   });
 
-  app.get("/api/networth/live", async () => {
+  app.get<{ Querystring: { includeHidden?: string } }>("/api/networth/live", async (req) => {
+    const includeHidden = req.query.includeHidden === "1";
+    const catHidden = includeHidden ? "1=1" : "c.hidden = 0";
+    const debtHiddenFilter = includeHidden ? "" : "AND hidden = 0";
     const values = db
       .prepare(
         `SELECT sv.amount_minor, sv.currency, c.type, s.id AS snapshot_id, s.month
          FROM snapshot_values sv
          JOIN categories c ON c.id = sv.category_id
          JOIN snapshots s ON s.id = sv.snapshot_id
-         WHERE c.hidden = 0
+         WHERE ${catHidden}
            AND sv.snapshot_id = (SELECT id FROM snapshots ORDER BY month DESC LIMIT 1)`
       )
       .all() as { amount_minor: number; currency: Currency; type: "asset" | "liability"; snapshot_id: number; month: string }[];
@@ -176,7 +185,7 @@ export default async function netWorthRoutes(app: FastifyInstance): Promise<void
         .map((c) => Promise.all([getLatestRate(c, "PLN"), getLatestRate(c, "USD")]))
     );
     const debts = db
-      .prepare("SELECT direction, amount_minor, currency FROM debts WHERE settled = 0 AND hidden = 0")
+      .prepare(`SELECT direction, amount_minor, currency FROM debts WHERE settled = 0 ${debtHiddenFilter}`)
       .all() as { direction: "owed_to_me" | "i_owe"; amount_minor: number; currency: Currency }[];
 
     const toBaseAsync = async (from: Currency, to: Currency): Promise<number> => {

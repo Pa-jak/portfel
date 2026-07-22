@@ -4,60 +4,54 @@ import { api, type CategoryType, type Currency } from "../lib/api";
 import { qk } from "../lib/queryClient";
 import { CURRENCIES } from "../lib/money";
 import { Field, Spinner, StateMsg } from "../components/ui";
-import { useVault } from "../lib/vault";
+import { useReveal } from "../lib/vault";
 
 interface EditState {
   id: number | null;
-  tempId: string | null; // set for a hidden (vault) category
   name: string;
   type: CategoryType;
   currency: Currency;
   sortOrder: number;
-  hidden: boolean; // vault target flag (ukryta)
+  hidden: boolean;
 }
 
-const EMPTY: EditState = { id: null, tempId: null, name: "", type: "asset", currency: "PLN", sortOrder: 0, hidden: false };
+const EMPTY: EditState = { id: null, name: "", type: "asset", currency: "PLN", sortOrder: 0, hidden: false };
 
 export default function Categories() {
   const qc = useQueryClient();
-  const vault = useVault();
-  const list = useQuery({ queryKey: qk.categories, queryFn: () => api.listCategories() });
+  const { revealed } = useReveal();
+  const list = useQuery({
+    queryKey: [...qk.categories, { revealed }],
+    queryFn: () => api.listCategories({ includeHidden: revealed }),
+  });
   const [edit, setEdit] = useState<EditState | null>(null);
 
   const createMut = useMutation({
     mutationFn: (b: Parameters<typeof api.createCategory>[0]) => api.createCategory(b),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.categories }); setEdit(null); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.categories }); qc.invalidateQueries({ queryKey: qk.networth() }); qc.invalidateQueries({ queryKey: qk.networthLive }); qc.invalidateQueries({ queryKey: qk.history }); setEdit(null); },
   });
   const updateMut = useMutation({
     mutationFn: (v: { id: number; b: Parameters<typeof api.updateCategory>[1] }) =>
       api.updateCategory(v.id, v.b),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.categories }); setEdit(null); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.categories }); qc.invalidateQueries({ queryKey: qk.networth() }); qc.invalidateQueries({ queryKey: qk.networthLive }); qc.invalidateQueries({ queryKey: qk.history }); setEdit(null); },
   });
   const deleteMut = useMutation({
     mutationFn: (id: number) => api.deleteCategory(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.categories }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: qk.categories }); qc.invalidateQueries({ queryKey: qk.networth() }); qc.invalidateQueries({ queryKey: qk.networthLive }); qc.invalidateQueries({ queryKey: qk.history }); },
   });
 
   const sorted = [...(list.data ?? [])].sort(
     (a, b) => a.sort_order - b.sort_order || a.id - b.id,
   );
-  const hiddenCats = vault.unlocked && vault.doc ? vault.doc.categories : [];
 
   async function onSave(s: EditState) {
-    if (s.hidden) {
-      if (vault.unlocked) {
-        if (s.tempId) {
-          await vault.updateCategory(s.tempId, {
-            name: s.name, type: s.type, currency: s.currency,
-          });
-        } else {
-          await vault.addCategory({ name: s.name, type: s.type, currency: s.currency, values: {} });
-        }
-      }
-      setEdit(null);
-      return;
-    }
-    const body = { name: s.name, type: s.type, currency: s.currency, sort_order: s.sortOrder };
+    const body = {
+      name: s.name,
+      type: s.type,
+      currency: s.currency,
+      sort_order: s.sortOrder,
+      hidden: s.hidden ? 1 : 0,
+    };
     if (s.id == null) createMut.mutate(body);
     else updateMut.mutate({ id: s.id, b: body });
   }
@@ -72,7 +66,7 @@ export default function Categories() {
       </div>
 
       {list.isLoading ? <Spinner /> : null}
-      {sorted.length === 0 && hiddenCats.length === 0 && !list.isLoading ? (
+      {sorted.length === 0 && !list.isLoading ? (
         <StateMsg>Brak kategorii. Dodaj pierwszą.</StateMsg>
       ) : (
         <div className="card" style={{ padding: 0, overflowX: "auto" }}>
@@ -88,8 +82,11 @@ export default function Categories() {
             </thead>
             <tbody>
               {sorted.map((c) => (
-                <tr key={c.id}>
-                  <td>{c.name}</td>
+                <tr key={c.id} style={c.hidden ? { background: "var(--surface-2)" } : undefined}>
+                  <td>
+                    {c.name}
+                    {c.hidden ? <span className="pill" style={{ fontSize: "0.66rem", marginLeft: 4 }} title="ukryta">ukryta</span> : null}
+                  </td>
                   <td>
                     <span className={`pill ${c.type === "asset" ? "good" : "bad"}`}>
                       {c.type === "asset" ? "aktywo" : "zobowiązanie"}
@@ -100,34 +97,10 @@ export default function Categories() {
                   <td>
                     <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
                       <button className="btn sm" onClick={() =>
-                        setEdit({ id: c.id, tempId: null, name: c.name, type: c.type, currency: c.currency, sortOrder: c.sort_order, hidden: false })
+                        setEdit({ id: c.id, name: c.name, type: c.type, currency: c.currency, sortOrder: c.sort_order, hidden: c.hidden === 1 })
                       }>Edytuj</button>
                       <button className="btn danger sm" disabled={deleteMut.isPending}
                         onClick={() => { if (confirm(`Usunąć kategorię „${c.name}”?`)) onDeletePlain(c.id); }}
-                      >Usuń</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {hiddenCats.map((c) => (
-                <tr key={c.tempId} style={{ background: "var(--surface-2)" }}>
-                  <td>
-                    {c.name} <span className="pill" style={{ fontSize: "0.66rem", marginLeft: 4 }} title="ukryta">ukryta</span>
-                  </td>
-                  <td>
-                    <span className={`pill ${c.type === "asset" ? "good" : "bad"}`}>
-                      {c.type === "asset" ? "aktywo" : "zobowiązanie"}
-                    </span>
-                  </td>
-                  <td>{c.currency}</td>
-                  <td className="num muted">—</td>
-                  <td>
-                    <div className="row" style={{ gap: 6, justifyContent: "flex-end" }}>
-                      <button className="btn sm" onClick={() =>
-                        setEdit({ id: null, tempId: c.tempId, name: c.name, type: c.type, currency: c.currency, sortOrder: 0, hidden: true })
-                      }>Edytuj</button>
-                      <button className="btn danger sm"
-                        onClick={() => { if (confirm(`Usunąć kategorię „${c.name}”?`)) void vault.deleteCategory(c.tempId); }}
                       >Usuń</button>
                     </div>
                   </td>
@@ -143,8 +116,8 @@ export default function Categories() {
           state={edit}
           onClose={() => setEdit(null)}
           onSave={(s) => void onSave(s)}
-          pending={!edit.hidden && (createMut.isPending || updateMut.isPending)}
-          allowHidden={vault.unlocked}
+          pending={createMut.isPending || updateMut.isPending}
+          allowHidden={revealed}
           error={createMut.error?.message ?? updateMut.error?.message}
         />
       ) : null}
@@ -171,7 +144,7 @@ function EditModal({
   const valid = s.name.trim().length > 0;
   return (
     <div className="card" style={{ marginTop: 12 }}>
-      <div className="h3">{state.id == null && state.tempId == null ? "Nowa kategoria" : "Edytuj kategorię"}</div>
+      <div className="h3">{state.id == null ? "Nowa kategoria" : "Edytuj kategorię"}</div>
       <div className="row">
         <div className="grow">
           <Field label="Nazwa">
@@ -195,14 +168,12 @@ function EditModal({
             </select>
           </Field>
         </div>
-        {!s.hidden ? (
-          <div style={{ width: 120 }}>
-            <Field label="Kolejność">
-              <input className="field" type="number" value={s.sortOrder}
-                onChange={(e) => setS({ ...s, sortOrder: Number(e.target.value) || 0 })} />
-            </Field>
-          </div>
-        ) : null}
+        <div style={{ width: 120 }}>
+          <Field label="Kolejność">
+            <input className="field" type="number" value={s.sortOrder}
+              onChange={(e) => setS({ ...s, sortOrder: Number(e.target.value) || 0 })} />
+          </Field>
+        </div>
         {allowHidden ? (
           <div style={{ alignSelf: "flex-end", paddingBottom: 12 }}>
             <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: "0.9rem" }}>
@@ -217,7 +188,7 @@ function EditModal({
       <div className="row" style={{ justifyContent: "flex-end", marginTop: 4 }}>
         <button className="btn" onClick={onClose} disabled={pending}>Anuluj</button>
         <button className="btn primary" disabled={!valid || pending} onClick={() => onSave(s)}>
-          {state.id == null && state.tempId == null ? "Dodaj" : "Zapisz"}
+          {state.id == null ? "Dodaj" : "Zapisz"}
         </button>
       </div>
     </div>

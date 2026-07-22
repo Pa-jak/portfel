@@ -91,14 +91,6 @@ function migrate(db: Database.Database): void {
       UNIQUE(snapshot_id, base, quote)
     );
 
-    CREATE TABLE IF NOT EXISTS secret_blob (
-      id         INTEGER PRIMARY KEY CHECK(id=1),
-      salt       BLOB,
-      iv         BLOB,
-      ciphertext BLOB,
-      updated_at TEXT    NOT NULL DEFAULT (datetime('now'))
-    );
-
     CREATE TABLE IF NOT EXISTS settings (
       key   TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -112,6 +104,8 @@ function seedSettings(db: Database.Database): void {
   const defaults: Record<string, string> = {
     base_currencies: "PLN,USD",
     account_currencies: "PLN,USD,EUR,NOK",
+    reveal_phrase: "Alohomora",
+    hide_phrase: "Obliviate",
   };
   const ins = db.prepare("INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)");
   for (const [k, v] of Object.entries(defaults)) ins.run(k, v);
@@ -167,13 +161,6 @@ export interface SnapshotFxRow {
   base: string;
   quote: string;
   rate: number;
-}
-export interface SecretBlobRow {
-  id: number;
-  salt: Buffer | null;
-  iv: Buffer | null;
-  ciphertext: Buffer | null;
-  updated_at: string;
 }
 export interface SettingsRow {
   key: string;

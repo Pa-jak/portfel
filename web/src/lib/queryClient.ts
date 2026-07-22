@@ -19,6 +19,5 @@ export const qk = {
   networth: (snapshot?: number) => ["networth", snapshot ?? "current"] as const,
   networthLive: ["networth", "live"] as const,
   history: ["networth", "history"] as const,
-  secretBlob: ["secret-blob"] as const,
   fxRates: ["fx", "rates"] as const,
 };

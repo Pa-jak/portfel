@@ -4,17 +4,17 @@ import { api, type Currency } from "../lib/api";
 import { qk } from "../lib/queryClient";
 import { CURRENCIES } from "../lib/money";
 import { Spinner, StateMsg, Field } from "../components/ui";
-import { useVault } from "../lib/vault";
 import { triggerUpdate } from "../lib/pwa";
 
 export default function Settings() {
   const qc = useQueryClient();
-  const vault = useVault();
   const settings = useQuery({ queryKey: qk.settings, queryFn: () => api.getSettings() });
   const [updateState, setUpdateState] = useState<"idle" | "checking" | "latest" | "available">("idle");
   const [updateMsg, setUpdateMsg] = useState<string | null>(null);
   const [baseCurrencies, setBaseCurrencies] = useState<string>("PLN,USD");
   const [accountCurrencies, setAccountCurrencies] = useState<string>("PLN,USD,EUR,NOK");
+  const [revealPhrase, setRevealPhrase] = useState<string>("Alohomora");
+  const [hidePhrase, setHidePhrase] = useState<string>("Obliviate");
   const [loaded, setLoaded] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
 
@@ -23,6 +23,8 @@ export default function Settings() {
       setLoaded(true);
       setBaseCurrencies(settings.data.base_currencies ?? "PLN,USD");
       setAccountCurrencies(settings.data.account_currencies ?? "PLN,USD,EUR,NOK");
+      setRevealPhrase(settings.data.reveal_phrase ?? "Alohomora");
+      setHidePhrase(settings.data.hide_phrase ?? "Obliviate");
     }
   }, [loaded, settings.data]);
 
@@ -31,6 +33,7 @@ export default function Settings() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: qk.settings });
       setMsg({ kind: "ok", text: "Zapisano ustawienia." });
+      window.dispatchEvent(new Event("portfel:settings-updated"));
     },
     onError: (e: Error) => setMsg({ kind: "err", text: e.message }),
   });
@@ -89,6 +92,15 @@ export default function Settings() {
     return list.split(",").map((x) => x.trim()).includes(code);
   }
 
+  function saveAll() {
+    saveMut.mutate({
+      base_currencies: baseCurrencies,
+      account_currencies: accountCurrencies,
+      reveal_phrase: revealPhrase,
+      hide_phrase: hidePhrase,
+    });
+  }
+
   if (settings.isLoading) return <div className="page"><Spinner /></div>;
   if (!settings.data) return <div className="page"><StateMsg>Nie udało się pobrać ustawień.</StateMsg></div>;
 
@@ -140,6 +152,29 @@ export default function Settings() {
         </div>
       </div>
 
+      <div className="card" style={{ marginTop: 12 }}>
+        <h3 className="h3">Hasła ukrywania (widok)</h3>
+        <p className="muted" style={{ fontSize: "0.82rem", marginTop: 0 }}>
+          Wpisanie hasła odkrywającego w polu „Szukaj / dodaj” pokazuje ukryte
+          kategorie i długi. Hasła ukrywającego chowa je z powrotem. To NIE jest
+          szyfrowanie — tylko ukrycie widoku; dane leżą w bazie jawne.
+        </p>
+        <div className="row" style={{ gap: 12, marginTop: 8 }}>
+          <div className="grow">
+            <Field label="Hasło odkrywające">
+              <input className="field" value={revealPhrase}
+                onChange={(e) => setRevealPhrase(e.target.value)} />
+            </Field>
+          </div>
+          <div className="grow">
+            <Field label="Hasło ukrywające">
+              <input className="field" value={hidePhrase}
+                onChange={(e) => setHidePhrase(e.target.value)} />
+            </Field>
+          </div>
+        </div>
+      </div>
+
       {msg ? (
         <div className={`card ${msg.kind === "ok" ? "ok" : "err"}`} style={{ marginTop: 12 }}>{msg.text}</div>
       ) : null}
@@ -148,16 +183,15 @@ export default function Settings() {
         <button
           className="btn primary"
           disabled={saveMut.isPending}
-          onClick={() => saveMut.mutate({ base_currencies: baseCurrencies, account_currencies: accountCurrencies })}
+          onClick={() => saveAll()}
         >
           {saveMut.isPending ? "Zapisywanie…" : "Zapisz ustawienia"}
         </button>
       </div>
 
       <div className="card muted" style={{ marginTop: 12, fontSize: "0.82rem" }}>
-        Uwaga: webowe API kryptografii (Web Crypto) i instalacja PWA wymagają bezpiecznego
-        kontekstu (HTTPS lub localhost). Przez zwykły http://IP w sieci lokalnej przeglądarka
-        może je blokować — użyj reverse-proxy z HTTPS.
+        Ukrywanie widoku działa również przez zwykłe http://IP w sieci lokalnej.
+        Instalacja PWA nadal zaley na bezpiecznym kontekście (HTTPS lub localhost).
       </div>
 
       <div className="card" style={{ marginTop: 12 }}>
@@ -183,65 +217,6 @@ export default function Settings() {
               </button>
             ) : null}
           </div>
-        </div>
-      </div>
-
-      {vault.unlocked ? <PassphraseBlock /> : null}
-    </div>
-  );
-}
-
-function PassphraseBlock(): React.ReactNode {
-  const vault = useVault();
-  const [cur, setCur] = useState("");
-  const [next, setNext] = useState("");
-  const [next2, setNext2] = useState("");
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function submit() {
-    if (!next || next !== next2) {
-      setMsg({ kind: "err", text: "Nowe hasła nie są zgodne." });
-      return;
-    }
-    setBusy(true);
-    const ok = await vault.changePassphrase(cur, next);
-    setBusy(false);
-    if (ok) {
-      setMsg({ kind: "ok", text: "Hasło zmienione." });
-      setCur(""); setNext(""); setNext2("");
-    } else {
-      setMsg({ kind: "err", text: "Nie udało się zmienić hasła (nieprawidłowe obecne hasło)." });
-    }
-  }
-
-  return (
-    <div className="card" style={{ marginTop: 12 }}>
-      <h3 className="h3">Zmień hasło chroniące dodatkowe dane</h3>
-      <div className="row">
-        <div className="grow">
-          <Field label="Obecne hasło">
-            <input className="field" type="password" value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="off" />
-          </Field>
-        </div>
-        <div className="grow">
-          <Field label="Nowe hasło">
-            <input className="field" type="password" value={next} onChange={(e) => setNext(e.target.value)} autoComplete="off" />
-          </Field>
-        </div>
-        <div className="grow">
-          <Field label="Powtórz nowe">
-            <input className="field" type="password" value={next2} onChange={(e) => setNext2(e.target.value)} autoComplete="off" />
-          </Field>
-        </div>
-      </div>
-      <div className="row between" style={{ alignItems: "center", marginTop: 4 }}>
-        <div>
-          {msg ? <span className={msg.kind === "ok" ? "ok" : "err"}>{msg.text}</span> : null}
-        </div>
-        <div className="row" style={{ gap: 8 }}>
-          <button className="btn danger" onClick={() => { vault.lock(); }} disabled={busy}>Zablokuj teraz</button>
-          <button className="btn primary" disabled={busy || !next} onClick={() => void submit()}>Zmień hasło</button>
         </div>
       </div>
     </div>

@@ -4,8 +4,12 @@ import { getDb, type CategoryRow, type CategoryType, type Currency } from "../db
 export default async function categoryRoutes(app: FastifyInstance): Promise<void> {
   const db = getDb();
 
-  app.get("/api/categories", async () => {
-    return db.prepare("SELECT * FROM categories ORDER BY sort_order, id").all() as CategoryRow[];
+  app.get<{ Querystring: { includeHidden?: string } }>("/api/categories", async (req) => {
+    const includeHidden = req.query.includeHidden === "1";
+    const where = includeHidden ? "" : "WHERE hidden = 0";
+    return db
+      .prepare(`SELECT * FROM categories ${where} ORDER BY sort_order, id`)
+      .all() as CategoryRow[];
   });
 
   app.get<{ Params: { id: string } }>("/api/categories/:id", async (req, reply) => {
@@ -21,9 +25,9 @@ export default async function categoryRoutes(app: FastifyInstance): Promise<void
     if (!validBody(b)) return reply.code(400).send({ error: "invalid body" });
     const info = db
       .prepare(
-        "INSERT INTO categories(name, type, currency, sort_order) VALUES (?, ?, ?, ?)"
+        "INSERT INTO categories(name, type, currency, sort_order, hidden) VALUES (?, ?, ?, ?, ?)"
       )
-      .run(b.name, b.type, b.currency, b.sort_order ?? 0);
+      .run(b.name, b.type, b.currency, b.sort_order ?? 0, b.hidden === 1 ? 1 : 0);
     return reply
       .code(201)
       .send(db.prepare("SELECT * FROM categories WHERE id = ?").get(info.lastInsertRowid) as CategoryRow);
@@ -34,9 +38,9 @@ export default async function categoryRoutes(app: FastifyInstance): Promise<void
     if (!validBody(b)) return reply.code(400).send({ error: "invalid body" });
     const info = db
       .prepare(
-        "UPDATE categories SET name=?, type=?, currency=?, sort_order=? WHERE id=?"
+        "UPDATE categories SET name=?, type=?, currency=?, sort_order=?, hidden=? WHERE id=?"
       )
-      .run(b.name, b.type, b.currency, b.sort_order ?? 0, req.params.id);
+      .run(b.name, b.type, b.currency, b.sort_order ?? 0, b.hidden === 1 ? 1 : 0, req.params.id);
     if (info.changes === 0) return reply.code(404).send({ error: "not found" });
     return db.prepare("SELECT * FROM categories WHERE id = ?").get(req.params.id) as CategoryRow;
   });
@@ -52,6 +56,7 @@ interface CategoryBody {
   type: CategoryType;
   currency: Currency;
   sort_order?: number;
+  hidden?: number;
 }
 
 function safeParse(raw: unknown): CategoryBody | null {
@@ -68,5 +73,6 @@ function validBody(b: CategoryBody | null): b is CategoryBody {
   if (b.type !== "asset" && b.type !== "liability") return false;
   if (!["PLN", "USD", "EUR", "NOK"].includes(b.currency)) return false;
   if (b.sort_order != null && typeof b.sort_order !== "number") return false;
+  if (b.hidden != null && b.hidden !== 0 && b.hidden !== 1) return false;
   return true;
 }

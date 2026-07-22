@@ -6,7 +6,6 @@ import { getDb, closeDb } from "./db";
 import categoryRoutes from "./routes/categories";
 import snapshotRoutes from "./routes/snapshots";
 import debtRoutes from "./routes/debts";
-import secretBlobRoutes from "./routes/secretBlob";
 import settingsRoutes from "./routes/settings";
 import netWorthRoutes from "./routes/networth";
 import fxRoutes from "./routes/fx";
@@ -26,7 +25,6 @@ async function buildServer(): Promise<FastifyInstance> {
   await app.register(categoryRoutes, { prefix: "" });
   await app.register(snapshotRoutes, { prefix: "" });
   await app.register(debtRoutes, { prefix: "" });
-  await app.register(secretBlobRoutes, { prefix: "" });
   await app.register(settingsRoutes, { prefix: "" });
   await app.register(netWorthRoutes, { prefix: "" });
   await app.register(fxRoutes, { prefix: "" });

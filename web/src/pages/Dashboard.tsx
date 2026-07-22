@@ -15,130 +15,54 @@ import { formatMinor } from "../lib/money";
 import { formatMonth, formatCompact } from "../lib/format";
 import { qk } from "../lib/queryClient";
 import { Spinner } from "../components/ui";
-import { useVault } from "../lib/vault";
-import { type RateMap, loadRates, sumHiddenCategoriesForMonth, sumHiddenDebts } from "../lib/fxConvert";
+import { useReveal } from "../lib/vault";
 
 export default function Dashboard() {
   const [search, setSearch] = useState("");
-  const [confirm, setConfirm] = useState<{ text: string } | null>(null);
-  const [hint, setHint] = useState<string>("");
+  const reveal = useReveal();
 
-  const vault = useVault();
   const netWorth = useQuery({
-    queryKey: qk.networth(),
-    queryFn: () => api.getNetWorth(),
+    queryKey: [...qk.networth(), { revealed: reveal.revealed }],
+    queryFn: () => api.getNetWorth({ includeHidden: reveal.revealed }),
   });
   const live = useQuery({
-    queryKey: qk.networthLive,
-    queryFn: () => api.getNetWorthLive(),
+    queryKey: [...qk.networthLive, { revealed: reveal.revealed }],
+    queryFn: () => api.getNetWorthLive({ includeHidden: reveal.revealed }),
   });
   const history = useQuery({
-    queryKey: qk.history,
-    queryFn: () => api.getNetWorthHistory(),
-  });
-
-  // Only load rates when unlocked; looks like an ordinary background fetch.
-  const fxRates = useQuery({
-    queryKey: qk.fxRates,
-    queryFn: () => loadRates(),
-    enabled: vault.unlocked,
+    queryKey: [...qk.history, { revealed: reveal.revealed }],
+    queryFn: () => api.getNetWorthHistory({ includeHidden: reveal.revealed }),
   });
 
   async function onSearchSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = search.trim();
-    setHint("");
-    if (!text) {
-      setConfirm(null);
-      return;
-    }
-
-    // Confirm-create flow: a previous submit with no blob asks to retype.
-    if (confirm) {
-      if (text === confirm.text) {
-        const ok = await vault.createVault(text);
-        if (ok) setHint("");
-        else setHint("Nie udało się utworzyć.");
-      } else {
-        // Wrong retype: silently cancel — looks like ordinary search.
-        setHint("");
-      }
-      setConfirm(null);
-      setSearch("");
-      return;
-    }
-
-    const out = await vault.submitTrigger(text);
-    if (!out.hadBlob) {
-      // No blob yet: discreetly remember this text, ask for a retype.
-      setConfirm({ text });
-      setHint("Wpisz ponownie, aby potwierdzić dodanie.");
-    } else {
-      // Existing blob: unlock attempt (silent on failure) or lock on Obliviate.
-      setConfirm(null);
-    }
+    if (!text) return;
+    reveal.submitPhrase(text);
     setSearch("");
   }
 
   const nw = live.data ?? netWorth.data;
 
-  // Compute hidden adjustments to current month's totals (when unlocked).
-  const hiddenAdjust = useMemo(() => {
-    if (!vault.unlocked || !vault.doc || !fxRates.data) return null;
-    const month = nw?.month ?? null;
-    const rates: RateMap = fxRates.data;
-    if (!month) {
-      // No snapshot yet; hidden categories for nonexistent month contribute 0.
-      return {
-        PLN: sumHiddenDebts(vault.doc.debts, "PLN", rates),
-        USD: sumHiddenDebts(vault.doc.debts, "USD", rates),
-      };
-    }
-    return {
-      PLN:
-        sumHiddenCategoriesForMonth(vault.doc.categories, month, "PLN", rates) +
-        sumHiddenDebts(vault.doc.debts, "PLN", rates),
-      USD:
-        sumHiddenCategoriesForMonth(vault.doc.categories, month, "USD", rates) +
-        sumHiddenDebts(vault.doc.debts, "USD", rates),
-    };
-  }, [vault.unlocked, vault.doc, fxRates.data, nw?.month]);
-
   function total(cur: "PLN" | "USD"): number {
-    const base = nw ? Math.round(nw.base[cur]) : 0;
-    const extra = hiddenAdjust ? hiddenAdjust[cur] : 0;
-    return base + extra;
+    return nw ? Math.round(nw.base[cur]) : 0;
   }
 
   const chartData = useMemo(() => {
     if (!history.data) return [];
-    const rates = fxRates.data;
-    const doc = vault.doc;
-    const unlocked = vault.unlocked && !!rates && !!doc;
-    return history.data.map((p) => {
-      let pln = p.PLN;
-      let usd = p.USD;
-      if (unlocked && rates && doc) {
-        pln += sumHiddenCategoriesForMonth(doc.categories, p.month, "PLN", rates);
-        usd += sumHiddenCategoriesForMonth(doc.categories, p.month, "USD", rates);
-        // Debts are constants (no per-month) — add once per historical point.
-        pln += sumHiddenDebts(doc.debts, "PLN", rates);
-        usd += sumHiddenDebts(doc.debts, "USD", rates);
-      }
-      return {
-        month: p.month,
-        label: formatMonth(p.month),
-        PLN: Math.round(pln / 100),
-        USD: Math.round(usd / 100),
-        income: p.income_minor,
-        incomeCurrency: p.income_currency,
-      };
-    });
-  }, [history.data, vault.unlocked, vault.doc, fxRates.data]);
+    return history.data.map((p) => ({
+      month: p.month,
+      label: formatMonth(p.month),
+      PLN: Math.round(p.PLN / 100),
+      USD: Math.round(p.USD / 100),
+      income: p.income_minor,
+      incomeCurrency: p.income_currency,
+    }));
+  }, [history.data]);
 
   return (
     <div className="page">
-      {/* "Szukaj / dodaj" — vault trigger as side effect of normal search. */}
+      {/* "Szukaj / dodaj" — reveal/hide trigger. */}
       <form className="search-top" onSubmit={onSearchSubmit}>
         <span className="ico">🔍</span>
         <input
@@ -147,11 +71,10 @@ export default function Dashboard() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {vault.unlocked ? (
+        {reveal.revealed ? (
           <span className="pill good" style={{ fontSize: "0.68rem", padding: "1px 7px" }} title="odblokowane">●</span>
         ) : null}
       </form>
-      {hint ? <div className="muted" style={{ fontSize: "0.78rem", marginTop: -6, marginBottom: 8 }}>{hint}</div> : null}
 
       <div className="section-title"><h2>Majątek netto</h2></div>
 

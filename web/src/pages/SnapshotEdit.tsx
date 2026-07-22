@@ -11,19 +11,19 @@ import { qk } from "../lib/queryClient";
 import { formatMinor } from "../lib/money";
 import { toYearMonth } from "../lib/format";
 import { Field, MoneyInput, Spinner, StateMsg} from "../components/ui";
-import { useVault, type VaultCategory } from "../lib/vault";
+import { useReveal } from "../lib/vault";
 
-type ValueMap = Record<string, number>; // key for normal: numeric id as string; for hidden: tempId
+type ValueMap = Record<string, number>; // key: numeric category id as string
 
 export default function SnapshotEdit() {
   const { id } = useParams<{ id?: string }>();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const vault = useVault();
+  const { revealed } = useReveal();
 
   const categories = useQuery({
-    queryKey: qk.categories,
-    queryFn: () => api.listCategories(),
+    queryKey: [...qk.categories, { revealed }],
+    queryFn: () => api.listCategories({ includeHidden: revealed }),
   });
   const snapshots = useQuery({
     queryKey: qk.snapshots,
@@ -94,8 +94,6 @@ export default function SnapshotEdit() {
     [categories.data],
   );
 
-  const hiddenCats: VaultCategory[] = vault.unlocked && vault.doc ? vault.doc.categories : [];
-
   const canSubmit =
     /^\d{4}-\d{2}$/.test(month) &&
     !createMut.isPending &&
@@ -107,21 +105,7 @@ export default function SnapshotEdit() {
       .map((c) => ({ category_id: c.id, amount_minor: values[String(c.id)], currency: c.currency }));
   }
 
-  // Persist hidden category monthly values to the vault when the snapshot is saved.
-  async function persistHiddenValues() {
-    if (!vault.unlocked) return;
-    const m = month;
-    for (const c of hiddenCats) {
-      const v = values[c.tempId] ?? 0;
-      const cur = c.values[m] ?? 0;
-      if (v !== cur) {
-        await vault.setMonthValue(c.tempId, m, v);
-      }
-    }
-  }
-
   async function submit() {
-    await persistHiddenValues();
     const body = {
       month,
       income_minor: incomeMinor,
@@ -135,7 +119,7 @@ export default function SnapshotEdit() {
   if (categories.isLoading) return <div className="page"><Spinner /></div>;
   if (editingExisting && snapshot.isLoading) return <div className="page"><Spinner /></div>;
   if (editingExisting && !snapshot.data) return <div className="page"><StateMsg>Snapshot nie istnieje.</StateMsg></div>;
-  if (sortedCats.length === 0 && hiddenCats.length === 0)
+  if (sortedCats.length === 0)
     return (
       <div className="page">
         <StateMsg>Najpierw dodaj kategorie w zakładce „Kategorie”.</StateMsg>
@@ -197,13 +181,9 @@ export default function SnapshotEdit() {
             <tbody>
               {sortedCats.map((c) => (
                 <ValueRow key={c.id} name={c.name} type={c.type} currency={c.currency}
+                  hidden={c.hidden === 1}
                   value={values[String(c.id)] ?? 0}
                   onChange={(v) => setValues((m) => ({ ...m, [String(c.id)]: v }))} />
-              ))}
-              {hiddenCats.map((c) => (
-                <ValueRow key={c.tempId} name={c.name} type={c.type} currency={c.currency}
-                  hidden value={c.values[month] ?? 0}
-                  onChange={(v) => setValues((m) => ({ ...m, [c.tempId]: v }))} />
               ))}
             </tbody>
           </table>
